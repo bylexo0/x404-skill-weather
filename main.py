@@ -71,18 +71,17 @@ async def execute(request: WebhookRequest):
 
     action   = request.action
     params   = request.params
+
+    # Extract location from params or from the full message
     location = params.get("location") or params.get("city", "")
+    if not location and params.get("message"):
+        location = extract_location_from_message(params["message"])
 
     if not location:
         return {
             "success": False,
             "message": "Please provide a location. For example: 'weather in London'"
         }
-
-    # Extract location from either params.location or params.message
-    location = params.get("location") or params.get("city", "")
-    if not location and params.get("message"):
-        location = extract_location_from_message(params["message"])
 
     if action == "get_current":
         return await get_current_weather(location, api_key)
