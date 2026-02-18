@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 import os
+import re
 
 app = FastAPI(title="X404 Weather Skill", version="1.0.0")
 
@@ -25,6 +26,22 @@ app.add_middleware(
 )
 
 OPENWEATHER_BASE = "https://api.openweathermap.org/data/2.5"
+
+
+def extract_location_from_message(message: str) -> str:
+    """Extract location from natural language — called when webhook receives full message."""
+    patterns = [
+        r'\bin\s+([A-Za-z\s]+?)(?:\?|$|,|\.|today|tomorrow|now|please)',
+        r'\bfor\s+([A-Za-z\s]+?)(?:\?|$|,|\.|today|tomorrow|now|please)',
+        r'\bweather\s+([A-Za-z\s]+?)(?:\?|$|,|\.|today|tomorrow|now|please)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            location = match.group(1).strip()
+            if location and len(location) > 1:
+                return location
+    return ""
 
 
 # ── Request Model ────────────────────────────────────────────────
@@ -62,6 +79,11 @@ async def execute(request: WebhookRequest):
             "message": "Please provide a location. For example: 'weather in London'"
         }
 
+    # Extract location from either params.location or params.message
+    location = params.get("location") or params.get("city", "")
+    if not location and params.get("message"):
+        location = extract_location_from_message(params["message"])
+
     if action == "get_current":
         return await get_current_weather(location, api_key)
 
@@ -69,7 +91,6 @@ async def execute(request: WebhookRequest):
         return await get_forecast(location, api_key)
 
     else:
-        # Default to current weather for any unknown action
         return await get_current_weather(location, api_key)
 
 
